@@ -5,12 +5,40 @@ package
   ylastic_costsagent;
 # ABSTRACT: Gather AWS cost data for Ylastic
 
+use File::Basename;
+use Getopt::Lucid ':all';
+use Log::Dispatchouli 2;
 use App::Ylastic::CostsAgent;
+
+my $opts = Getopt::Lucid->getopt([
+  Param("dir|d"),
+  Param("syslog|s"),
+  Param("logpath|l"),
+  Switch("dry-run|n"),
+  Switch("debug"),
+]);
 
 my $cf = shift @ARGV
   or die "usage: $0 <config-file>\n";
 
-my $app = App::Ylastic::CostsAgent->new( config_file => $cf );
+local $ENV{DISPATCHOULI_PATH} = $opts->get_logpath
+  if $opts->get_logpath;
+
+my $logger = Log::Dispatchouli->new({
+  ident     => basename($0),
+  facility  => $opts->get_syslog ? $opts->get_syslog : undef,
+  to_file   => $opts->get_logpath ? 1 : undef,
+  log_pid   => 0,
+  debug     => $opts->get_debug,
+});
+
+my $app = App::Ylastic::CostsAgent->new(
+  config_file => $cf,
+  logger      => $logger,
+  dir         => $opts->get_dir,
+  upload      => ! $opts->get_dry_run,
+);
+
 exit $app->run;
 
 __END__

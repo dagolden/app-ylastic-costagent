@@ -13,11 +13,21 @@ use Carp qw/croak/;
 use Config::Tiny;
 use File::Spec::Functions qw/catfile/;
 use File::Temp ();
+use Log::Dispatchouli 2;
 use IO::Socket::SSL; # force dependency to trigger SSL support
-use Object::Tiny qw/config_file mech ylastic_id accounts tempdir/;
 use Time::Piece;
 use Time::Piece::Month;
 use WWW::Mechanize;
+
+use Object::Tiny qw(
+  accounts
+  config_file
+  dir
+  logger
+  mech
+  upload
+  ylastic_id
+);
 
 my %URL = (
   ylastic_service_list  => "http://ylastic.com/cost_services.list",
@@ -33,7 +43,8 @@ sub new {
     unless $self->config_file && -r $self->config_file;
 
   $self->_parse_config;
-  $self->{tempdir} = $ENV{COSTS_AGENT_TEMP} || File::Temp::tempdir();
+  $self->{dir} ||= File::Temp::tempdir();
+  $self->{logger} ||= Log::Dispatchouli({ident => __PACKAGE__, to_self => 1});
 
   return $self;
 }
@@ -43,8 +54,8 @@ sub run {
 
   for my $account ( @{ $self->accounts } ) {
     my $zipfile = $self->_download_usage( $account );
-    $self->_upload_usage( $zipfile )
-      unless $ENV{COSTS_AGENT_NO_UPLOAD};
+    $self->_upload_usage( $account, $zipfile )
+      if $self->upload;
   }
 
   return 0;
@@ -55,7 +66,7 @@ sub run {
 #--------------------------------------------------------------------------#
 
 sub _do_aws_login {
-  my ($self, $user, $pass) = @_;
+  my ($self, $id,$user, $pass) = @_;
   $self->mech->get($URL{aws_usage_report_form});
   $self->mech->submit_form(
     form_name => 'signIn',
@@ -64,20 +75,21 @@ sub _do_aws_login {
       password => $pass,
     }
   );
+  $self->logger->log_debug(["Logged into AWS for account %s as %s", $id, $user]);
 }
 
 sub _download_usage {
   my ($self, $account) = @_;
   my ($id, $user, $pass) = @$account;
   $self->_initialize_mech;
-  $self->_do_aws_login( $user, $pass );
+  $self->_do_aws_login( $id, $user, $pass );
 
   my $zip = Archive::Zip->new;
 
   for my $service ( @{ $self->_service_list } ) {
 #    print "Getting $service for $id\n";
     eval {
-      my $usage = $self->_get_service_usage($service);
+      my $usage = $self->_get_service_usage($id, $service);
       if ( length $usage > 70 ) {
         my $filename = sprintf("%s_%s_%s\.csv", $self->ylastic_id, $id, $service);
         my $member = $zip->addString( $usage => $filename );
@@ -89,8 +101,10 @@ sub _download_usage {
 
   # write zipfile
   my $zipname = sprintf("%s_%s_aws_usage.zip", $self->ylastic_id, $id);
-  my $zippath = catfile($self->tempdir, $zipname);
+  my $zippath = catfile($self->dir, $zipname);
   $zip->writeToFileNamed( $zippath );
+
+  $self->logger->log(["Downloaded AWS usage reports for account %s", $id]);
 
   return $zippath;
 }
@@ -103,7 +117,7 @@ sub _end_date {
 }
 
 sub _get_service_usage {
-  my ($self, $service) = @_;
+  my ($self, $id, $service) = @_;
 
   $self->mech->get($URL{aws_usage_report_form});
 
@@ -134,6 +148,7 @@ sub _get_service_usage {
     }
   );
 
+  $self->logger->log_debug("Got $service data for account $id");
   return $self->mech->content;
 }
 
@@ -171,6 +186,7 @@ sub _parse_config {
     push @accounts, [$k, $user, $pass];
   }
   $self->{accounts} = \@accounts;
+  $self->logger->log_debug(["Parsed config_file %s", $self->config_file]);
   return;
 }
 
@@ -188,7 +204,7 @@ sub _start_date {
 }
 
 sub _upload_usage {
-  my ($self, $zipfile) = @_;
+  my ($self, $account, $zipfile) = @_;
   $self->_initialize_mech;
   $self->mech->get($URL{ylastic_upload_form});
   $self->mech->submit_form(
@@ -197,6 +213,7 @@ sub _upload_usage {
       file1 => $zipfile,
     }
   );
+  $self->logger->log(["Uploaded usage reports to Ylastic for account %s",$account->[0]]);
   return;
 }
 
