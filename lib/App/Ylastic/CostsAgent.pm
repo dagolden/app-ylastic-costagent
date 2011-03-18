@@ -1,4 +1,4 @@
-use 5.008001;
+use 5.010;
 use strict;
 use warnings;
 use utf8;
@@ -8,11 +8,16 @@ package App::Ylastic::CostsAgent;
 
 # Dependencies
 use autodie 2.00;
+use Archive::Zip qw( :CONSTANTS );
 use Carp qw/croak/;
-use Object::Tiny qw/config_file mech ylastic_id accounts/;
-use IO::Socket::SSL; # force dependency to trigger SSL support
-use WWW::Mechanize;
 use Config::Tiny;
+use File::Spec::Functions qw/catfile/;
+use File::Temp ();
+use IO::Socket::SSL; # force dependency to trigger SSL support
+use Object::Tiny qw/config_file mech ylastic_id accounts tempdir/;
+use Time::Piece;
+use Time::Piece::Month;
+use WWW::Mechanize;
 
 my %URL = (
   ylastic_service_list  => "http://ylastic.com/cost_services.list",
@@ -27,26 +32,8 @@ sub new {
   croak __PACKAGE__ . " requires a valid 'config_file' argument\n"
     unless $self->config_file && -r $self->config_file;
 
-  my $config = Config::Tiny->read( $self->config_file )
-    or croak Config::Tiny->errstr;
-
-  $self->{ylastic_id} = $config->{_}{ylastic_id}
-    or croak $self->config_file . " does not define 'ylastic_id'";
-
-  my @accounts;
-  for my $k ( keys %$config ) {
-    next unless $k =~ /^(?:\d{12}|\d{4}-\d{4}-\d{4})$/;
-    my ($user, $pass) = map { $config->{$k}{$_} } qw/user pass/;
-    unless ( length $user && length $pass ) {
-      warn "Invalid user/password for $k. Skipping it.";
-      next;
-    }
-    push @accounts, [$k, $user, $pass];
-  }
-  $self->{accounts} = \@accounts;
-
-  $self->{mech} = WWW::Mechanize->new();
-  $self->mech->agent_alias("Linux Mozilla");
+  $self->_parse_config;
+  $self->{tempdir} = $ENV{COSTS_AGENT_TEMP} || File::Temp::tempdir();
 
   return $self;
 }
@@ -55,46 +42,163 @@ sub run {
   my $self = shift;
 
   for my $account ( @{ $self->accounts } ) {
-    my $zipfile = $self->download_usage( $account );
-    $self->upload_usage( $zipfile );
+    my $zipfile = $self->_download_usage( $account );
+    $self->_upload_usage( $zipfile )
+      unless $ENV{COSTS_AGENT_NO_UPLOAD};
   }
 
   return 0;
 }
 
-sub service_list {
-  my $self = shift;
-  my $list = $self->mech->get($URL{ylastic_service_list})->decoded_content;
-  chomp $list;
-  return split q{,}, $list;
-}
+#--------------------------------------------------------------------------#
+# private
+#--------------------------------------------------------------------------#
 
-sub download_usage {
-  my ($self, $account) = @_;
-  my ($id, $user, $pass) = @$account;
-  $self->do_aws_login( $user, $pass );
-
-  # download data
-  #
-}
-
-sub do_aws_login {
+sub _do_aws_login {
   my ($self, $user, $pass) = @_;
   $self->mech->get($URL{aws_usage_report_form});
   $self->mech->submit_form(
     form_name => 'signIn',
     fields => {
       email => $user,
-      password => $pas,
+      password => $pass,
     }
   );
 }
 
-sub upload_usage {
-  my ($self, $zipfile) = @_;
+sub _download_usage {
+  my ($self, $account) = @_;
+  my ($id, $user, $pass) = @$account;
+  $self->_initialize_mech;
+  $self->_do_aws_login( $user, $pass );
 
+  my $zip = Archive::Zip->new;
+
+  for my $service ( @{ $self->_service_list } ) {
+#    print "Getting $service for $id\n";
+    eval {
+      my $usage = $self->_get_service_usage($service);
+      if ( length $usage > 70 ) {
+        my $filename = sprintf("%s_%s_%s\.csv", $self->ylastic_id, $id, $service);
+        my $member = $zip->addString( $usage => $filename );
+        $member->desiredCompressionLevel( 9 );
+      }
+    };
+    warn "Warning: $@\n" if $@;
+  }
+
+  # write zipfile
+  my $zipname = sprintf("%s_%s_aws_usage.zip", $self->ylastic_id, $id);
+  my $zippath = catfile($self->tempdir, $zipname);
+  $zip->writeToFileNamed( $zippath );
+
+  return $zippath;
 }
 
+sub _end_date {
+  state $end_date =  Time::Piece::Month->new(
+    Time::Piece->new()
+  )->next_month->start;
+  return $end_date;
+}
+
+sub _get_service_usage {
+  my ($self, $service) = @_;
+
+  $self->mech->get($URL{aws_usage_report_form});
+
+  $self->mech->submit_form(
+    form_name => 'usageReportForm',
+    fields => {
+      productCode => $service,
+    }
+  );
+
+  my $action = 'download-usage-report-csv';
+  my $form = $self->mech->form_name('usageReportForm');
+  return unless $form && $form->find_input($action);
+
+  $self->mech->submit_form(
+    form_name => 'usageReportForm',
+    button => $action,
+    fields => {
+      productCode => $service,
+      timePeriod  => 'aws-portal-custom-date-range',
+      startYear   => $self->_start_date->year,
+      startMonth  => $self->_start_date->mon,
+      startDay    => $self->_start_date->mday,
+      endYear     => $self->_end_date->year,
+      endMonth    => $self->_end_date->mon,
+      endDay      => $self->_end_date->mday,
+      periodType  => 'days',
+    }
+  );
+
+  return $self->mech->content;
+}
+
+sub _initialize_mech {
+  my $self = shift;
+  $self->{mech} = WWW::Mechanize->new(
+    quiet => 0,
+    on_error => \&Carp::croak
+  );
+  $self->mech->ssl_opts( verify_hostname => 0 );
+  $self->mech->agent_alias("Linux Mozilla");
+  $self->mech->default_header('Accept' => 'text/html, application/xml, */*');
+}
+
+sub _parse_config {
+  my $self = shift;
+  my $config = Config::Tiny->read( $self->config_file )
+    or croak Config::Tiny->errstr;
+
+  $self->{ylastic_id} = $config->{_}{ylastic_id}
+    or croak $self->config_file . " does not define 'ylastic_id'";
+
+  my @accounts;
+  for my $k ( keys %$config ) {
+    next if $k eq "_"; # ski config root
+    unless ( $k =~ /^(?:\d{12}|\d{4}-\d{4}-\d{4})$/ ) {
+      warn "Invalid AWS ID '$k'.  Skipping it.";
+      next;
+    }
+    my ($user, $pass) = map { $config->{$k}{$_} } qw/user pass/;
+    unless ( length $user && length $pass ) {
+      warn "Invalid user/password for $k. Skipping it.";
+      next;
+    }
+    push @accounts, [$k, $user, $pass];
+  }
+  $self->{accounts} = \@accounts;
+  return;
+}
+
+sub _service_list {
+  my $self = shift;
+  return $self->{services} if $self->{services};
+  my $list = $self->mech->get($URL{ylastic_service_list})->decoded_content;
+  chomp $list;
+  return $self->{services} = [split q{,}, $list];
+}
+
+sub _start_date {
+  state $start_date = Time::Piece::Month->new("2010-01-01")->start;
+  return $start_date;
+}
+
+sub _upload_usage {
+  my ($self, $zipfile) = @_;
+  $self->_initialize_mech;
+  $self->mech->get($URL{ylastic_upload_form});
+  $self->mech->submit_form(
+    form_name => 'upload',
+    fields => {
+      file1 => $zipfile,
+    }
+  );
+  return;
+}
 
 1;
 
