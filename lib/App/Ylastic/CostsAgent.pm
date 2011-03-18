@@ -44,7 +44,7 @@ sub new {
     push @accounts, [$k, $user, $pass];
   }
   $self->{accounts} = \@accounts;
-  
+
   $self->{mech} = WWW::Mechanize->new();
   $self->mech->agent_alias("Linux Mozilla");
 
@@ -71,7 +71,23 @@ sub service_list {
 
 sub download_usage {
   my ($self, $account) = @_;
+  my ($id, $user, $pass) = @$account;
+  $self->do_aws_login( $user, $pass );
 
+  # download data
+  #
+}
+
+sub do_aws_login {
+  my ($self, $user, $pass) = @_;
+  $self->mech->get($URL{aws_usage_report_form});
+  $self->mech->submit_form(
+    form_name => 'signIn',
+    fields => {
+      email => $user,
+      password => $pas,
+    }
+  );
 }
 
 sub upload_usage {
