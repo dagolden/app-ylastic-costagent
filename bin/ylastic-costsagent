@@ -1,0 +1,49 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+package
+  ylastic_costsagent;
+# ABSTRACT: Gather AWS cost data for Ylastic
+
+use App::Ylastic::CostsAgent;
+
+my $cf = shift @ARGV
+  or die "usage: $0 <config-file>\n";
+
+my $app = App::Ylastic::CostsAgent->new( config_file => $cf );
+exit $app->run;
+
+__END__
+
+=for Pod::Coverage method_names_here
+
+=begin wikidoc
+
+= SYNOPSIS
+
+  use App::Ylastic::CostsAgent;
+
+= DESCRIPTION
+
+This module might be cool, but you'd never know it from the lack
+of documentation.
+
+= USAGE
+
+Good luck!
+
+== Automation with cron
+
+  # download raw usage data every 12 hours
+  # PERL5LIB=... (if needed)
+  PATH=/usr/local/bin:/usr/bin:/bin
+  0 */12 * * * ylastic-costagent -C /etc/ylastic.config > /tmp/ylastic_aws_costs_agent.log 2>&1
+
+= SEE ALSO
+
+Maybe other modules do related things.
+
+=end wikidoc
+
+=cut
+
