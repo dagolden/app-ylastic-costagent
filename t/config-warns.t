@@ -12,6 +12,21 @@ my @cases = (
     error => qr/Invalid AWS ID/,
     file => 'bad-account.ini',
   },
+  {
+    label => 'Missing username',
+    error => qr/Invalid user\/password/,
+    file => 'missing-user.ini',
+  },
+  {
+    label => 'Missing password',
+    error => qr/Invalid user\/password/,
+    file => 'missing-pass.ini',
+  },
+  {
+    label => 'Missing username/password',
+    error => qr/Invalid user\/password/,
+    file => 'missing-userpass.ini',
+  },
 );
 
 for my $c ( @cases ) {
