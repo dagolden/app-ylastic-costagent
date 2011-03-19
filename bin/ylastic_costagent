@@ -125,6 +125,13 @@ hours:
 
 The C<-s user> option will log to the C<user> facility of syslogd.
 
+If you use a local perl library, be sure to add an appropriate PERL5LIB to
+your crontab file:
+
+  PERL5LIB=$HOME/perl5/lib/perl5/i686-linux:$HOME/perl5/lib/perl5
+
+Look at the PERL5LIB set by [local::lib] for the right paths to use.
+
 = ACKNOWLEDGMENTS
 
 This program is based on the original ylastic_aws_costs_agent.py program
