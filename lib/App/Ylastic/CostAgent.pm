@@ -14,7 +14,8 @@ use Config::Tiny;
 use File::Spec::Functions qw/catfile/;
 use File::Temp ();
 use Log::Dispatchouli 2;
-use IO::Socket::SSL; # force dependency to trigger SSL support
+use Mozilla::CA;      # force dependency to trigger SSL validation
+use IO::Socket::SSL;  # force dependency to trigger SSL support
 use Time::Piece;
 use Time::Piece::Month;
 use WWW::Mechanize;
@@ -183,7 +184,6 @@ sub _initialize_mech {
     quiet => 0,
     on_error => \&Carp::croak
   );
-  $self->mech->ssl_opts( verify_hostname => 0 );
   $self->mech->agent_alias("Linux Mozilla");
   $self->mech->default_header('Accept' => 'text/html, application/xml, */*');
 }
