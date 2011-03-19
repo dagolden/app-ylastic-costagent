@@ -3,7 +3,7 @@ use strict;
 use warnings;
 package
   ylastic_costagent;
-# ABSTRACT: Gather AWS usage and cost data for Ylastic
+# ABSTRACT: Send AWS usage and cost data to Ylastic
 
 use File::Basename;
 use Getopt::Lucid ':all';
