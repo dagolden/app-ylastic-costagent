@@ -65,7 +65,7 @@ __END__
   --dry-run|-n  Download, but don't upload (default is false)
   --debug       Log with extra detail (default is false)
   --help|h      Show summary of options
-  
+
 = DESCRIPTION
 
 This program downloads your Amazon Web Services usage data and uploads it to
@@ -77,12 +77,16 @@ job to ensure up-to-date usage and spending history.
 == Installation
 
 Install [App::Ylastic::CostAgent] using your regular CPAN client or
-distribution package manager (if available).
+distribution package manager (if available).  You may need the
+OpenSSL development libraries installed if you don't already have
+SSL working.
 
 If you aren't sure how to configure a CPAN client, see this excellent post on
-[using CPAN as a non-root user|http://goo.gl/j27IB].  For example
-(assuming Ubuntu Linux and a bash shell):
+[using CPAN as a non-root user|http://goo.gl/j27IB].
 
+For example, assuming Ubuntu Linux and a bash shell:
+
+ $ sudo apt-get install libssl-dev
  $ wget -O- http://cpanmin.us | perl - -l ~/perl5 App::cpanminus local::lib
  $ eval `perl -I ~/perl5/lib/perl5 -Mlocal::lib`
  $ echo 'eval `perl -I ~/perl5/lib/perl5 -Mlocal::lib`' >> ~/.bashrc
@@ -115,7 +119,7 @@ group/world readable.  You should only run this program on a machine that is
 safely behind a firewall.  All web requests with account data are transmitted
 over SSL.
 
-== Automation 
+== Automation
 
 This program should be run regularly to keep your usage data current on
 Ylastic.  Here is an example cron job entry that updates usage data every 12

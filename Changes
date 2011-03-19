@@ -1,6 +1,7 @@
 Revision history for App-Ylastic-CostAgent
 
 {{$NEXT}}
+    - Added documentation that libssl-dev may be needed for dependencies
 
 0.002     2011-03-18 23:24:22 America/New_York
     - Add dependency on Mozilla::CA and switch on hostname verification
