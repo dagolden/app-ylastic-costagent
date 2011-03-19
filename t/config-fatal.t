@@ -4,7 +4,7 @@ use Test::More 0.88;
 use Test::Fatal;
 use File::Spec::Functions qw/catfile/;
 
-use App::Ylastic::CostsAgent;
+use App::Ylastic::CostAgent;
 
 my @cases = (
   {
@@ -22,7 +22,7 @@ my @cases = (
 for my $c ( @cases ) {
   my $file = catfile( 't', 'data', $c->{file} );
   like(
-    exception { App::Ylastic::CostsAgent->new(config_file => $file) },
+    exception { App::Ylastic::CostAgent->new(config_file => $file) },
     $c->{error},
     $c->{label}
   );

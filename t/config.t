@@ -3,7 +3,7 @@ use warnings;
 use Test::More 0.88;
 use File::Spec::Functions qw/catfile/;
 
-use App::Ylastic::CostsAgent;
+use App::Ylastic::CostAgent;
 
 my @cases = (
   {
@@ -18,7 +18,7 @@ my @cases = (
 
 for my $c ( @cases ) {
   my $file = catfile( 't', 'data', $c->{file} );
-  my $obj = new_ok( 'App::Ylastic::CostsAgent', [config_file => $file], $c->{label} );
+  my $obj = new_ok( 'App::Ylastic::CostAgent', [config_file => $file], $c->{label} );
 }
 
 done_testing;

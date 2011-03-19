@@ -52,9 +52,9 @@ sub new {
   croak __PACKAGE__ . " requires a valid 'config_file' argument\n"
     unless $self->config_file && -r $self->config_file;
 
-  $self->_parse_config;
-  $self->{dir} ||= File::Temp::tempdir();
   $self->{logger} ||= Log::Dispatchouli->new({ident => __PACKAGE__, to_self => 1});
+  $self->{dir} ||= File::Temp::tempdir();
+  $self->_parse_config;
 
   return $self;
 }
@@ -203,12 +203,12 @@ sub _parse_config {
       warn "Invalid AWS ID '$k'.  Skipping it.";
       next;
     }
-    $k =~ s{-}{}g;
     my ($user, $pass) = map { $config->{$k}{$_} } qw/user pass/;
     unless ( length $user && length $pass ) {
       warn "Invalid user/password for $k. Skipping it.";
       next;
     }
+    $k =~ s{-}{}g;
     push @accounts, [$k, $user, $pass];
   }
   $self->{accounts} = \@accounts;

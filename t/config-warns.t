@@ -4,7 +4,7 @@ use Test::More 0.88;
 use Test::Warn;
 use File::Spec::Functions qw/catfile/;
 
-use App::Ylastic::CostsAgent;
+use App::Ylastic::CostAgent;
 
 my @cases = (
   {
@@ -33,7 +33,7 @@ for my $c ( @cases ) {
   my $file = catfile( 't', 'data', $c->{file} );
   my $obj;
   warning_like {
-    $obj = App::Ylastic::CostsAgent->new(config_file => $file);
+    $obj = App::Ylastic::CostAgent->new(config_file => $file);
   } $c->{error}, "$c->{label}: warning seen";
   ok( $obj, "$c->{label}: obj still created" );
 }
