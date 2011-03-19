@@ -203,7 +203,8 @@ sub _parse_config {
       warn "Invalid AWS ID '$k'.  Skipping it.";
       next;
     }
-    my ($user, $pass) = map { $config->{$k}{$_} } qw/user pass/;
+    my ($user, $pass) = map { defined $_ ? $_ : '' }
+                        map { $config->{$k}{$_} } qw/user pass/;
     unless ( length $user && length $pass ) {
       warn "Invalid user/password for $k. Skipping it.";
       next;
