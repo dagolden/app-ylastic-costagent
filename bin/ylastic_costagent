@@ -57,7 +57,7 @@ __END__
 
 = SYNOPSIS
 
-  ylastic-costsagent [OPTIONS] <CONFIG_FILE>
+  ylastic-costagent [OPTIONS] <CONFIG_FILE>
 
   --dir|-d      Directory to hold downloads (default is tempdir)
   --syslog|-s   Syslogd facility for logging (default is none)
@@ -90,7 +90,7 @@ If you aren't sure how to configure a CPAN client, see this excellent post on
 
 == Config file format
 
-The {ylastic-costsagent} program requires a configuration file that
+The {ylastic-costagent} program requires a configuration file that
 specifies your Ylastic and AWS account data.  The file is 'INI' format.
 Here is a template:
 
@@ -121,7 +121,7 @@ This program should be run regularly to keep your usage data current on
 Ylastic.  Here is an example cron job entry that updates usage data every 12
 hours:
 
-  0 */12 * * * /path/to/ylastic-costsagent -s user /path/to/config.ini
+  0 */12 * * * /path/to/ylastic-costagent -s user /path/to/config.ini
 
 The C<-s user> option will log to the C<user> facility of syslogd.
 
