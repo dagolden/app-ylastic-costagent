@@ -3,8 +3,8 @@ use strict;
 use warnings;
 use utf8;
 
-package App::Ylastic::CostsAgent;
-# ABSTRACT: Perl port of the Ylastic Costs Agent for Amazon Web Services
+package App::Ylastic::CostAgent;
+# ABSTRACT: Perl port of the Ylastic Cost Agent for Amazon Web Services
 
 # Dependencies
 use autodie 2.00;
@@ -35,6 +35,16 @@ my %URL = (
   aws_usage_report_form => "https://aws-portal.amazon.com/gp/aws/developer/account/index.html?ie=UTF8&action=usage-report",
 );
 
+#--------------------------------------------------------------------------#
+# new -- constructor
+#
+# Parameters for new:
+#   * config_file -- path to a .ini style configuration file (required)
+#   * dir -- a directory to hold downloaded data (defaults to a tempdir)
+#   * logger -- a Log::Dispatchouli object (defaults to a null logger)
+#   * upload -- whether to upload data to Ylastic (default is false)
+#--------------------------------------------------------------------------#
+
 sub new {
   my $class = shift;
   my $self = $class->SUPER::new( @_ );
@@ -44,10 +54,14 @@ sub new {
 
   $self->_parse_config;
   $self->{dir} ||= File::Temp::tempdir();
-  $self->{logger} ||= Log::Dispatchouli({ident => __PACKAGE__, to_self => 1});
+  $self->{logger} ||= Log::Dispatchouli->new({ident => __PACKAGE__, to_self => 1});
 
   return $self;
 }
+
+#--------------------------------------------------------------------------#
+# run -- downloads and possibly uploads data for all accounts from config
+#--------------------------------------------------------------------------#
 
 sub run {
   my $self = shift;
@@ -87,16 +101,16 @@ sub _download_usage {
   my $zip = Archive::Zip->new;
 
   for my $service ( @{ $self->_service_list } ) {
-#    print "Getting $service for $id\n";
-    eval {
-      my $usage = $self->_get_service_usage($id, $service);
-      if ( length $usage > 70 ) {
-        my $filename = sprintf("%s_%s_%s\.csv", $self->ylastic_id, $id, $service);
-        my $member = $zip->addString( $usage => $filename );
-        $member->desiredCompressionLevel( 9 );
-      }
-    };
-    warn "Warning: $@\n" if $@;
+    my $usage = $self->_get_service_usage($id, $service);
+    if ( length $usage > 70 ) {
+      $self->logger->log_debug("Got $service data for account $id");
+      my $filename = sprintf("%s_%s_%s\.csv", $self->ylastic_id, $id, $service);
+      my $member = $zip->addString( $usage => $filename );
+      $member->desiredCompressionLevel( 9 );
+    }
+    else {
+      $self->logger->log_debug("No $service data available for account $id");
+    }
   }
 
   # write zipfile
@@ -118,38 +132,49 @@ sub _end_date {
 
 sub _get_service_usage {
   my ($self, $id, $service) = @_;
+  my $usage;
 
-  $self->mech->get($URL{aws_usage_report_form});
+  ATTEMPT: for ( 0 .. 2 ) {
+    eval {
+      $self->mech->get($URL{aws_usage_report_form});
 
-  $self->mech->submit_form(
-    form_name => 'usageReportForm',
-    fields => {
-      productCode => $service,
+      $self->mech->submit_form(
+        form_name => 'usageReportForm',
+        fields => {
+          productCode => $service,
+        }
+      );
+
+      my $action = 'download-usage-report-csv';
+      my $form = $self->mech->form_name('usageReportForm');
+      return unless $form && $form->find_input($action);
+
+      $self->mech->submit_form(
+        form_name => 'usageReportForm',
+        button => $action,
+        fields => {
+          productCode => $service,
+          timePeriod  => 'aws-portal-custom-date-range',
+          startYear   => $self->_start_date->year,
+          startMonth  => $self->_start_date->mon,
+          startDay    => $self->_start_date->mday,
+          endYear     => $self->_end_date->year,
+          endMonth    => $self->_end_date->mon,
+          endDay      => $self->_end_date->mday,
+          periodType  => 'days',
+        }
+      );
+    };
+    if ( $@ ) {
+      $self->logger->log_debug("Error downloading $service for account $id: $@");
     }
-  );
-
-  my $action = 'download-usage-report-csv';
-  my $form = $self->mech->form_name('usageReportForm');
-  return unless $form && $form->find_input($action);
-
-  $self->mech->submit_form(
-    form_name => 'usageReportForm',
-    button => $action,
-    fields => {
-      productCode => $service,
-      timePeriod  => 'aws-portal-custom-date-range',
-      startYear   => $self->_start_date->year,
-      startMonth  => $self->_start_date->mon,
-      startDay    => $self->_start_date->mday,
-      endYear     => $self->_end_date->year,
-      endMonth    => $self->_end_date->mon,
-      endDay      => $self->_end_date->mday,
-      periodType  => 'days',
+    else { 
+      $usage = $self->mech->content;
+      last ATTEMPT;
     }
-  );
+  }
 
-  $self->logger->log_debug("Got $service data for account $id");
-  return $self->mech->content;
+  return $usage;
 }
 
 sub _initialize_mech {
@@ -178,6 +203,7 @@ sub _parse_config {
       warn "Invalid AWS ID '$k'.  Skipping it.";
       next;
     }
+    $k =~ s{-}{}g;
     my ($user, $pass) = map { $config->{$k}{$_} } qw/user pass/;
     unless ( length $user && length $pass ) {
       warn "Invalid user/password for $k. Skipping it.";
@@ -221,33 +247,23 @@ sub _upload_usage {
 
 __END__
 
-=for Pod::Coverage method_names_here
+=for Pod::Coverage 
+new
+run
+accounts
+config_file
+dir
+logger
+mech
+upload
+ylastic_id
 
 =begin wikidoc
 
-= SYNOPSIS
-
-  use App::Ylastic::CostsAgent;
-
 = DESCRIPTION
 
-This module might be cool, but you'd never know it from the lack
-of documentation.
-
-= USAGE
-
-Good luck!
-
-== Automation with cron
-
-  # download raw usage data every 12 hours
-  # PERL5LIB=... (if needed)
-  PATH=/usr/local/bin:/usr/bin:/bin
-  0 */12 * * * ylastic-costagent -C /etc/ylastic.config > /tmp/ylastic_aws_costs_agent.log 2>&1
-
-= SEE ALSO
-
-Maybe other modules do related things.
+This module contains the internal routines for L<ylastic-costagent>.  Please
+see that for end-user documentation.
 
 =end wikidoc
 
