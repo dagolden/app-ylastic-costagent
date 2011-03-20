@@ -1,6 +1,8 @@
 Revision history for App-Ylastic-CostAgent
 
 {{$NEXT}}
+
+0.003     2011-03-19 22:20:02 America/New_York
     - Added documentation that libssl-dev may be needed for dependencies
     - Updated installation example recipe with curl instead of wget
 
