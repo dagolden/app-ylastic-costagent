@@ -1,8 +1,7 @@
 #!/usr/bin/env perl
 use strict;
 use warnings;
-package
-  ylastic_costagent;
+# PODNAME: ylastic-costagent
 # ABSTRACT: Send AWS usage and cost data to Ylastic
 
 use File::Basename;
