@@ -2,6 +2,11 @@ Revision history for App-Ylastic-CostAgent
 
 {{$NEXT}}
 
+    - Fixed typos in the documentation
+
+    - Added README.INSTALL for anyone browsing the repository
+      directly and wondering how to install
+
 0.005     2011-03-21 10:13:11 America/New_York
 
     - Ensure proper shebang line gets set in ylastic-costagent
