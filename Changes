@@ -2,6 +2,8 @@ Revision history for App-Ylastic-CostAgent
 
 {{$NEXT}}
 
+0.006     2011-04-07 17:23:53 America/New_York
+
     - Fixed typos in the documentation
 
     - Added README.INSTALL for anyone browsing the repository
