@@ -126,7 +126,7 @@ hours:
 
   0 */12 * * * /path/to/ylastic-costagent -s user /path/to/config.ini
 
-The C<-s user> option will log to the C<user> facility of syslogd.
+The {-s user} option will log to the {user} facility of syslogd.
 
 If you use a local perl library, be sure to add an appropriate PERL5LIB to
 your crontab file:
